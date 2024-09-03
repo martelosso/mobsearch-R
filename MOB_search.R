@@ -1,11 +1,15 @@
 library(party)
 library(caret)
 
+source("mob-grid-search.R")
+
 
 generate_mob_models <- function(dataset, response, mob_control = mob_control()){
+  
+
+  
   # Identificar variáveis explicativas
   explanatory_vars <- colnames(dataset)[-which(colnames(dataset) == response)]
-  print(explanatory_vars)
   
   # Lista para armazenar os modelos e métricas
   mob_models <- list()
@@ -17,11 +21,13 @@ generate_mob_models <- function(dataset, response, mob_control = mob_control()){
   # Loop para gerar todas as combinações possíveis
   for (k in 1:(length(explanatory_vars) - 1)) {
     comb <- combn(explanatory_vars, k, simplify = FALSE)
+    print(comb)
     
     # Para cada combinação de X e Z de tamanho k
     for (X in comb) {
       # Seleciona Z como sendo tudo que não está em X
       Z <- setdiff(explanatory_vars, X)
+      print(Z)
       
       # Formula da regressão
       formula <- as.formula(paste(response, "~", paste(X, collapse = " + "), "|", paste(Z, collapse = " + ")))
@@ -32,8 +38,9 @@ generate_mob_models <- function(dataset, response, mob_control = mob_control()){
       train_data = dataset[trainIndex,]
       test_data = dataset[-trainIndex,]
       
-      # Ajusta o mob e guarda
-      mob_model = mob(formula, data = train_data, control = mob_control)
+      # Encontra a melhor combinação de hiperparâmetros e retorna o modelo
+      best_fit <- grid_search_mob(train_data = train_data, test_data = test_data, response = response, model_formula = formula, optimize_for = "precision")
+      mob_model <- best_fit$best_model
       mob_models[[index]] <- mob_model
       
       # Resposta observada
@@ -75,7 +82,7 @@ generate_mob_models <- function(dataset, response, mob_control = mob_control()){
         node_index = pred_nodes == j
         confusion <- confusionMatrix(as.factor(predictions[node_index]), as.factor(actuals[node_index]))
         accuracy <- confusion$overall['Accuracy']
-        precision <- confusion$byClass['Precision']
+        precision <- confusion$byClass['Pos Pred Value']
         recall <- confusion$byClass['Sensitivity']
         f1 <- 2 * (precision * recall) / (precision + recall)
         
@@ -103,6 +110,8 @@ generate_mob_models <- function(dataset, response, mob_control = mob_control()){
   return(list(models = mob_models, metrics = evaluation_metrics, node_metrics = nodes_metrics))
   
 }
+
+
 
 # Exemplo de uso da função
 my_mob_control <- mob_control(alpha = 0.05, bonferroni = TRUE, minsplit = 20, trim = 0.1)
