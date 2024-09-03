@@ -10,13 +10,13 @@ generate_mob_models <- function(dataset, response, mob_control = mob_control()){
   # Lista para armazenar os modelos e métricas
   mob_models <- list()
   evaluation_metrics <- list()
+  nodes_metrics <- list()
   
   index <- 1
   
   # Loop para gerar todas as combinações possíveis
   for (k in 1:(length(explanatory_vars) - 1)) {
     comb <- combn(explanatory_vars, k, simplify = FALSE)
-    print(comb)
     
     # Para cada combinação de X e Z de tamanho k
     for (X in comb) {
@@ -38,12 +38,10 @@ generate_mob_models <- function(dataset, response, mob_control = mob_control()){
       
       # Resposta observada
       actuals <- test_data[[response]]
-      print(actuals)
       
       # Realizando predições no teste
       probs <- predict(mob_model, newdata = test_data)
       predictions <- ifelse(probs < 0.5, 0, 1)
-      print(predictions)
       
       # Matriz de confusão
       confusion <- confusionMatrix(as.factor(predictions), as.factor(actuals))
@@ -63,6 +61,36 @@ generate_mob_models <- function(dataset, response, mob_control = mob_control()){
         confusion = confusion$table
       )
       
+      # Nós preditos
+      pred_nodes <- predict(mob_model, newdata = test_data, type = "node")
+      
+      # Obtém nós únicos 
+      nodes <- unique(pred_nodes)
+      print(nodes)
+      
+      # Metricas por nó
+      node_metrics <- list()
+      for (j in nodes){
+        # Resultados no j-ésimo nó
+        node_index = pred_nodes == j
+        confusion <- confusionMatrix(as.factor(predictions[node_index]), as.factor(actuals[node_index]))
+        accuracy <- confusion$overall['Accuracy']
+        precision <- confusion$byClass['Precision']
+        recall <- confusion$byClass['Sensitivity']
+        f1 <- 2 * (precision * recall) / (precision + recall)
+        
+        # Guarda na lista
+        node_metrics[[j]] <- list(
+          accuracy = accuracy,
+          precision = precision,
+          recall = recall,
+          f1 = f1,
+          confusion = confusion$table
+        )
+      }
+      
+      # Guarda lista de métricas por nó na lista geral
+      nodes_metrics[[index]] <- node_metrics
       
       # Incrementa o index
       index <- index + 1
@@ -72,7 +100,7 @@ generate_mob_models <- function(dataset, response, mob_control = mob_control()){
   }
   
   # Retorna a lista de modelos e lista de resultados
-  return(list(models = mob_models, metrics = evaluation_metrics))
+  return(list(models = mob_models, metrics = evaluation_metrics, node_metrics = nodes_metrics))
   
 }
 
@@ -87,3 +115,5 @@ mob_model_1 <- results$model[[1]]
 # Acessar resultados do primeiro modelo da lista
 metrics_1 <- results$metrics[[1]]
 
+# Acessar metrics por nó do primeiro modelo
+node_metrics <- results$node_metrics[[1]]
